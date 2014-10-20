@@ -1,0 +1,8 @@
+[package]
+
+name = "packr-rs"
+version = "0.0.1"
+authors = ["Daniel Ludwig <codi@code-disaster.com>"]
+
+[dependencies.jni]
+path = "../jni-rs"
