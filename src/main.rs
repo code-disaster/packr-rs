@@ -10,7 +10,6 @@ use getopts::{optopt, optflag, getopts, OptGroup};
 use jni::*;
 use libc::*;
 use serialize::json;
-use std::comm;
 use std::io::File;
 use std::os;
 
@@ -73,7 +72,7 @@ fn get_libjvm_path(jre: Path) -> Path {
 
 fn check_for_exceptions(jni:&JNI) {
 	let throwable = jni.exception_occured();
-	if !jni_pointer_is_null(throwable) {
+	if !JNI::is_null(throwable) {
 		jni.exception_describe();
 		jni.exception_clear();
 		fail!("Exception caught!");
@@ -95,11 +94,6 @@ fn load_jvm(jni:&mut JNI, config:&Config) {
     	fail!("Could not attach JVM to thread");
     }
 	println!("JVM attached to thread ...");
-
-	let version:Jint = jni.get_version();
-	println!("JNIEnv get_version(): {:x}", version);
-
-	check_for_exceptions(jni);
 }
 
 fn load_main_class_and_method(jni:&JNI, path_to_jar:&str, main_class_name:&str) -> (Jclass, JmethodID) {
@@ -114,70 +108,70 @@ fn load_main_class_and_method(jni:&JNI, path_to_jar:&str, main_class_name:&str) 
 
 	let url_ctor = jni.get_method_id(url_class, "<init>", "(Ljava/lang/String;)V");
 	check_for_exceptions(jni);
-	assert!(!jni_pointer_is_null(url_ctor));
+	assert!(!JNI::is_null(url_ctor));
 
 	let url_str = jni.new_string_utf(path_to_jar);
 	check_for_exceptions(jni);
-	assert!(!jni_pointer_is_null(url_str));
+	assert!(!JNI::is_null(url_str));
 
 	let varargs:[Jvalue, ..2] = [url_str, 0u64];
 	let url = jni.new_object_a(url_class, url_ctor, varargs);
 	check_for_exceptions(jni);
-	assert!(!jni_pointer_is_null(url));
+	assert!(!JNI::is_null(url));
 
 	// array of URL
 
 	let url_array = jni.new_object_array(1, url_class, url);
 	check_for_exceptions(jni);
-	assert!(!jni_pointer_is_null(url_array));
+	assert!(!JNI::is_null(url_array));
 
 	// thread = Thread.currentThread()
 
 	let thread_class = jni.find_class("java/lang/Thread");
 	check_for_exceptions(jni);
-	assert!(!jni_pointer_is_null(thread_class));
+	assert!(!JNI::is_null(thread_class));
 
 	let thread_get_current = jni.get_static_method_id(thread_class, "currentThread", "()Ljava/lang/Thread;");
 	check_for_exceptions(jni);
-	assert!(!jni_pointer_is_null(thread_get_current));
+	assert!(!JNI::is_null(thread_get_current));
 
 	let thread = jni.call_static_object_method_a(thread_class, thread_get_current, []);
 	check_for_exceptions(jni);
-	assert!(!jni_pointer_is_null(thread));
+	assert!(!JNI::is_null(thread));
 
 	// contextClassLoader = thread.getContextClassLoader()
 
 	let thread_get_loader = jni.get_method_id(thread_class, "getContextClassLoader", "()Ljava/lang/ClassLoader;");
 	check_for_exceptions(jni);
-	assert!(!jni_pointer_is_null(thread_get_loader));
+	assert!(!JNI::is_null(thread_get_loader));
 
 	let loader_class = jni.find_class("java/lang/ClassLoader");
 	check_for_exceptions(jni);
-	assert!(!jni_pointer_is_null(loader_class));
+	assert!(!JNI::is_null(loader_class));
 
 	let loader = jni.call_object_method_a(thread, thread_get_loader, []);
 	check_for_exceptions(jni);
-	assert!(!jni_pointer_is_null(loader));
+	assert!(!JNI::is_null(loader));
 
 	// urlClassLoader = URLClassLoader.newInstance(url, contextClassLoader)
 
 	let url_loader_class = jni.find_class("java/net/URLClassLoader");
 	check_for_exceptions(jni);
-	assert!(!jni_pointer_is_null(url_loader_class));
+	assert!(!JNI::is_null(url_loader_class));
 
 	let url_loader_newinstance = jni.get_static_method_id(url_loader_class, "newInstance", "([Ljava/net/URL;Ljava/lang/ClassLoader;)Ljava/net/URLClassLoader;");
 	check_for_exceptions(jni);
-	assert!(!jni_pointer_is_null(url_loader_newinstance));
+	assert!(!JNI::is_null(url_loader_newinstance));
 
 	let url_loader = jni.call_static_object_method_a(url_loader_class, url_loader_newinstance, [url_array, loader]);
 	check_for_exceptions(jni);
-	assert!(!jni_pointer_is_null(url_loader));
+	assert!(!JNI::is_null(url_loader));
 
 	// thread.setContextClassLoader(urlClassLoader)
 
 	let thread_set_loader = jni.get_method_id(thread_class, "setContextClassLoader", "(Ljava/lang/ClassLoader;)V");
 	check_for_exceptions(jni);
-	assert!(!jni_pointer_is_null(thread_set_loader));
+	assert!(!JNI::is_null(thread_set_loader));
 
 	jni.call_void_method_a(thread, thread_set_loader, [url_loader]);
 	check_for_exceptions(jni);
@@ -186,26 +180,20 @@ fn load_main_class_and_method(jni:&JNI, path_to_jar:&str, main_class_name:&str) 
 
 	let load_class = jni.get_method_id(url_loader_class, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;");
 	check_for_exceptions(jni);
-	assert!(!jni_pointer_is_null(load_class));
+	assert!(!JNI::is_null(load_class));
 
 	// now, finally, load the Main class
 	let main_class_name_utf = jni.new_string_utf(main_class_name);
 	check_for_exceptions(jni);
-	assert!(!jni_pointer_is_null(main_class_name_utf));
-
-println!("1");
+	assert!(!JNI::is_null(main_class_name_utf));
 
 	let main_class = jni.call_object_method_a(url_loader, load_class, [main_class_name_utf]);
 	check_for_exceptions(jni);
-	assert!(!jni_pointer_is_null(main_class));
-
-println!("2");
+	assert!(!JNI::is_null(main_class));
 
 	let main_method = jni.get_static_method_id(main_class, "main", "([Ljava/lang/String;)V");
 	check_for_exceptions(jni);
-	assert!(!jni_pointer_is_null(main_method));
-
-println!("3");
+	assert!(!JNI::is_null(main_method));
 
 	(main_class, main_method)
 }
@@ -220,13 +208,13 @@ fn call_main(jni:&JNI, path_to_jar:&str, main_class_name:&str, args:&Vec<String>
 
 	let java_lang_String:Jclass = jni.find_class("java/lang/String");
 	check_for_exceptions(jni);
-	assert!(!jni_pointer_is_null(java_lang_String));
+	assert!(!JNI::is_null(java_lang_String));
 
 	let argc = args.len();
 
 	let argv = jni.new_object_array(argc as Jint, java_lang_String, 0u64);
 	check_for_exceptions(jni);
-	assert!(!jni_pointer_is_null(argv));
+	assert!(!JNI::is_null(argv));
 
 	for i in range(0u, argc) {
 		let arg = jni.new_string_utf(args[i].as_slice());
@@ -302,15 +290,7 @@ fn spawn_vm() {
 
 fn main() {
 
-	let (tx, rx): (Sender<uint>, Receiver<uint>) = comm::channel();
-	let task_tx = tx.clone();
-
-	spawn(proc() {
-		spawn_vm();
-		task_tx.send(0);
-	});
-
-	rx.recv();
+	spawn_vm();
 
     println!("Bye!")
 }
