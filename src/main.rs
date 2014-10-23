@@ -8,6 +8,7 @@ extern crate serialize;
 
 use getopts::{optopt, optflag, getopts, OptGroup};
 use jni::*;
+use jni::classpath::load_static_method;
 use libc::*;
 use serialize::json;
 use std::io::File;
@@ -31,6 +32,7 @@ struct Config {
 fn print_usage(program: &str, _opts: &[OptGroup]) {
     println!("Usage: {} [options]", program);
     println!("-h --help\tUsage");
+    println!("-- {{args}}\tUnparsed arguments passed through to Java main() method.");
 }
 
 fn read_config(path: &Path) -> Config {
@@ -104,113 +106,11 @@ fn load_jvm(jni:&mut JNI, config:&Config) {
 	println!("JVM attached to thread ...");
 }
 
-fn load_main_class_and_method(jni:&JNI, path_to_jar:&str, main_class_name:&str) -> (Jclass, JmethodID) {
-
-	// insanity ahead!
-	// reference: http://stackoverflow.com/questions/20328012/c-plugin-jni-java-classpath
-
-	// new java.net.URL("file://<path_to_jar>")
-
-	let url_class = jni.find_class("java/net/URL");
-	check_for_exceptions(jni);
-
-	let url_ctor = jni.get_method_id(url_class, "<init>", "(Ljava/lang/String;)V");
-	check_for_exceptions(jni);
-	assert!(!JNI::is_null(url_ctor));
-
-	let url_str = jni.new_string_utf(path_to_jar);
-	check_for_exceptions(jni);
-	assert!(!JNI::is_null(url_str));
-
-	let varargs:[Jvalue, ..2] = [url_str, 0u64];
-	let url = jni.new_object_a(url_class, url_ctor, varargs);
-	check_for_exceptions(jni);
-	assert!(!JNI::is_null(url));
-
-	// array of URL
-
-	let url_array = jni.new_object_array(1, url_class, url);
-	check_for_exceptions(jni);
-	assert!(!JNI::is_null(url_array));
-
-	// thread = Thread.currentThread()
-
-	let thread_class = jni.find_class("java/lang/Thread");
-	check_for_exceptions(jni);
-	assert!(!JNI::is_null(thread_class));
-
-	let thread_get_current = jni.get_static_method_id(thread_class, "currentThread", "()Ljava/lang/Thread;");
-	check_for_exceptions(jni);
-	assert!(!JNI::is_null(thread_get_current));
-
-	let thread = jni.call_static_object_method_a(thread_class, thread_get_current, []);
-	check_for_exceptions(jni);
-	assert!(!JNI::is_null(thread));
-
-	// contextClassLoader = thread.getContextClassLoader()
-
-	let thread_get_loader = jni.get_method_id(thread_class, "getContextClassLoader", "()Ljava/lang/ClassLoader;");
-	check_for_exceptions(jni);
-	assert!(!JNI::is_null(thread_get_loader));
-
-	let loader_class = jni.find_class("java/lang/ClassLoader");
-	check_for_exceptions(jni);
-	assert!(!JNI::is_null(loader_class));
-
-	let loader = jni.call_object_method_a(thread, thread_get_loader, []);
-	check_for_exceptions(jni);
-	assert!(!JNI::is_null(loader));
-
-	// urlClassLoader = URLClassLoader.newInstance(url, contextClassLoader)
-
-	let url_loader_class = jni.find_class("java/net/URLClassLoader");
-	check_for_exceptions(jni);
-	assert!(!JNI::is_null(url_loader_class));
-
-	let url_loader_newinstance = jni.get_static_method_id(url_loader_class, "newInstance", "([Ljava/net/URL;Ljava/lang/ClassLoader;)Ljava/net/URLClassLoader;");
-	check_for_exceptions(jni);
-	assert!(!JNI::is_null(url_loader_newinstance));
-
-	let url_loader = jni.call_static_object_method_a(url_loader_class, url_loader_newinstance, [url_array, loader]);
-	check_for_exceptions(jni);
-	assert!(!JNI::is_null(url_loader));
-
-	// thread.setContextClassLoader(urlClassLoader)
-
-	let thread_set_loader = jni.get_method_id(thread_class, "setContextClassLoader", "(Ljava/lang/ClassLoader;)V");
-	check_for_exceptions(jni);
-	assert!(!JNI::is_null(thread_set_loader));
-
-	jni.call_void_method_a(thread, thread_set_loader, [url_loader]);
-	check_for_exceptions(jni);
-
-	// loadClass = method [ urlClassLoader.loadClass(<string>) ] -> Class
-
-	let load_class = jni.get_method_id(url_loader_class, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;");
-	check_for_exceptions(jni);
-	assert!(!JNI::is_null(load_class));
-
-	// now, finally, load the Main class
-	let main_class_name_utf = jni.new_string_utf(main_class_name);
-	check_for_exceptions(jni);
-	assert!(!JNI::is_null(main_class_name_utf));
-
-	let main_class = jni.call_object_method_a(url_loader, load_class, [main_class_name_utf]);
-	check_for_exceptions(jni);
-	assert!(!JNI::is_null(main_class));
-
-	let main_method = jni.get_static_method_id(main_class, "main", "([Ljava/lang/String;)V");
-	check_for_exceptions(jni);
-	assert!(!JNI::is_null(main_method));
-
-	(main_class, main_method)
-}
-
 fn call_main(jni:&JNI, path_to_jar:&str, main_class_name:&str, args:&Vec<String>) {
 
 	// do class-loader voodoo
 
-	let (main_class, main_method) = load_main_class_and_method(jni, path_to_jar, main_class_name);
+	let (main_class, main_method) = load_static_method(jni, path_to_jar, main_class_name);
 
 	// pass program arguments
 
@@ -231,7 +131,10 @@ fn call_main(jni:&JNI, path_to_jar:&str, main_class_name:&str, args:&Vec<String>
 
    	// call main()
 
-   	jni.call_static_void_method_a(main_class, main_method, [argv]);
+   	match (main_class, main_method) {
+   		(0u64, 0u64) => println!("Could not find {} in {}", main_method, main_class),
+   		(_, _) => jni.call_static_void_method_a(main_class, main_method, [argv])
+   	};
 
    	println!("Quit from JVM ...");
 }
@@ -251,7 +154,10 @@ fn spawn_vm() {
     ];
 
 	let matches = match getopts(args.tail(), opts) {
-        Err(f) => { fail!(f.to_string()) }
+        Err(f) => {
+        	println!("{} Run {} --help to show options.", f.to_string(), program);
+        	return;
+        }
         Ok(m) => { m }
     };
 
@@ -296,6 +202,7 @@ fn spawn_vm() {
 
 }
 
+#[cfg(target_os = "macos")]
 extern fn run_loop_callback(signal:&Receiver<c_int>) {
 	match signal.try_recv() {
 		Err(_) => {},
@@ -305,6 +212,7 @@ extern fn run_loop_callback(signal:&Receiver<c_int>) {
 	}
 }
 
+#[cfg(target_os = "macos")]
 fn main() {
 
 	let (tx, rx): (Sender<c_int>, Receiver<c_int>) = std::comm::channel();
@@ -318,6 +226,4 @@ fn main() {
 	unsafe {
 		cfRunLoopRun(run_loop_callback, &rx);
 	}
-
-    println!("Bye!")
 }
