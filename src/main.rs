@@ -13,6 +13,14 @@ use serialize::json;
 use std::io::File;
 use std::os;
 
+#[link(name = "packrnative", kind = "static")]
+#[link(name = "CoreFoundation", kind = "framework")]
+#[link(name = "CoreServices", kind = "framework")]
+extern {
+	fn cfRunLoopRun(callback: extern fn(&Receiver<c_int>), signal:&Receiver<c_int>);
+	fn cfRunLoopStop();
+}
+
 #[deriving(Decodable)]
 struct Config {
 	jar: String,
@@ -258,7 +266,7 @@ fn spawn_vm() {
     let root_path = config_path.dir_path();
     println!("pwd: {}", root_path.display());
 
-	// check: do we need os.change_dir?
+	// change working dir (MacOS: starts at parent folder of .app)
 	if !os::change_dir(&root_path) {
 		fail!("Could not change working directory");
 	}
@@ -288,10 +296,28 @@ fn spawn_vm() {
 
 }
 
+extern fn run_loop_callback(signal:&Receiver<c_int>) {
+	match signal.try_recv() {
+		Err(_) => {},
+		Ok(_) => unsafe {
+			cfRunLoopStop();
+		} 
+	}
+}
+
 fn main() {
 
-	spawn_vm();
+	let (tx, rx): (Sender<c_int>, Receiver<c_int>) = std::comm::channel();
+	let proc_tx = tx.clone();
+
+	spawn(proc() {
+		spawn_vm();
+		proc_tx.send(0);
+	});
+
+	unsafe {
+		cfRunLoopRun(run_loop_callback, &rx);
+	}
 
     println!("Bye!")
 }
-
