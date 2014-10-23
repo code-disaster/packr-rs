@@ -6,7 +6,7 @@ extern crate jni;
 extern crate libc;
 extern crate serialize;
 
-use getopts::{optopt, optflag, getopts, OptGroup};
+use getopts::{optflag, getopts, OptGroup};
 use jni::*;
 use jni::classpath::load_static_method;
 use libc::*;
@@ -100,10 +100,10 @@ fn load_jvm(jni:&mut JNI, config:&Config) {
 	};
 
 	// attach to current thread
-    if jni.attach_current_thread() != JNI_OK {
+    /*if jni.attach_current_thread() != JNI_OK {
     	fail!("Could not attach JVM to thread");
     }
-	println!("JVM attached to thread ...");
+	println!("JVM attached to thread ...");*/
 }
 
 fn call_main(jni:&JNI, path_to_jar:&str, main_class_name:&str, args:&Vec<String>) {
@@ -199,7 +199,6 @@ fn spawn_vm() {
     call_main(&jni, class_path.as_slice(), config.mainClass.as_slice(), &matches.free);
 
     destroy_vm(&jni);
-
 }
 
 #[cfg(target_os = "macos")]

@@ -7,4 +7,4 @@ authors = ["Daniel Ludwig <codi@code-disaster.com>"]
 build = "make -C native"
 
 [dependencies.jni]
-path = "../jni-rs"
+git = "http://github.com/code-disaster/jni-rs"
