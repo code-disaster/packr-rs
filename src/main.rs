@@ -85,7 +85,7 @@ fn check_for_exceptions(jni:&JNI) {
 	if !JNI::is_null(throwable) {
 		jni.exception_describe();
 		jni.exception_clear();
-		fail!("Exception caught!");
+		panic!("Exception caught!");
 	}
 }
 
@@ -95,13 +95,13 @@ fn load_jvm(jni:&mut JNI, config:&Config) {
 
 	// load lib, create VM instance
 	match jni.load_jvm() {
-		Err(err) => fail!(err),
+		Err(err) => panic!(err),
 		Ok(_) => {}
 	};
 
 	// attach to current thread
     /*if jni.attach_current_thread() != JNI_OK {
-    	fail!("Could not attach JVM to thread");
+    	panic!("Could not attach JVM to thread");
     }
 	println!("JVM attached to thread ...");*/
 }
@@ -174,7 +174,7 @@ fn spawn_vm() {
 
 	// change working dir (MacOS: starts at parent folder of .app)
 	if !os::change_dir(&root_path) {
-		fail!("Could not change working directory");
+		panic!("Could not change working directory");
 	}
 
     let libjvmpath = get_libjvm_path(os::make_absolute(&Path::new("jre")));
@@ -188,7 +188,7 @@ fn spawn_vm() {
 
 	println!("Loading JVM library ...");
     let mut jni:JNI = match JNI::new(&libjvmpath) {
-    	Err(error) => fail!(error),
+    	Err(error) => panic!(error),
     	Ok(jni) => jni
     };
 
