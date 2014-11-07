@@ -120,7 +120,7 @@ fn call_main(jni:&JNI, path_to_jar:&str, main_class_name:&str, args:&Vec<String>
 
     let argc = args.len();
 
-    let argv = jni.new_object_array(argc as Jint, java_lang_String, 0u64);
+    let argv = jni.new_object_array(argc as Jint, java_lang_String, JNI_NULL);
     check_for_exceptions(jni);
     assert!(!JNI::is_null(argv));
 
@@ -132,7 +132,7 @@ fn call_main(jni:&JNI, path_to_jar:&str, main_class_name:&str, args:&Vec<String>
     // call main()
 
     match (main_class, main_method) {
-        (0u64, 0u64) => println!("Could not find {} in {}", main_method, main_class),
+        (JNI_NULL, JNI_NULL) => println!("Could not find {} in {}", main_method, main_class),
         (_, _) => jni.call_static_void_method_a(main_class, main_method, [argv])
     };
 
