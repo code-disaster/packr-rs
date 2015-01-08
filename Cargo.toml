@@ -6,5 +6,8 @@ authors = ["Daniel Ludwig <codi@code-disaster.com>"]
 
 build = "make -C native"
 
+[dependencies]
+rustc-serialize = "*"
+
 [dependencies.jni]
 git = "http://github.com/code-disaster/jni-rs"

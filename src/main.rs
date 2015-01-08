@@ -1,18 +1,20 @@
-#![feature(globs)]
 #![allow(non_snake_case)]
 
 extern crate getopts;
 extern crate jni;
 extern crate libc;
+extern crate "rustc-serialize" as rustc_serialize;
 extern crate serialize;
 
 use getopts::{optflag, getopts, OptGroup};
 use jni::*;
 use jni::classpath::load_static_method;
 use libc::*;
-use serialize::json;
+use rustc_serialize::json;
 use std::io::File;
 use std::os;
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::thread::Thread;
 
 #[link(name = "packrnative", kind = "static")]
 #[link(name = "CoreFoundation", kind = "framework")]
@@ -22,7 +24,7 @@ extern {
     fn cfRunLoopStop();
 }
 
-#[deriving(Decodable)]
+#[derive(RustcDecodable)]
 struct Config {
     jar: String,
     mainClass: String,
@@ -39,8 +41,8 @@ fn read_config(path: &Path) -> Config {
     let content = File::open(path).read_to_string().unwrap();
     let config:Config = json::decode(content.as_slice()).unwrap();
 
-    println!("jar: {:s}", config.jar);
-    println!("main class: {:s}", config.mainClass);
+    println!("jar: {}", config.jar);
+    println!("main class: {}", config.mainClass);
 
     for arg in config.vmArgs.iter() {
         println!("VM argument: {}", arg);
@@ -53,7 +55,7 @@ fn init_jvm_arguments(jni:&mut JNI, config: &Config) {
     let num_args = config.vmArgs.len();
     
     let cp_path = os::make_absolute(&Path::new(config.jar.as_slice()));
-    let class_path = format!("-Djava.class.path={}", cp_path.display());
+    let class_path = format!("-Djava.class.path={}", cp_path.unwrap().display());
 
     println!("class path: {}", class_path);
 
@@ -125,6 +127,7 @@ fn call_main(jni:&JNI, path_to_jar:&str, main_class_name:&str, args:&Vec<String>
     assert!(!JNI::is_null(argv));
 
     for i in range(0u, argc) {
+        println!("Application argument: {}", args[i].as_slice());
         let arg = jni.new_string_utf(args[i].as_slice());
         jni.set_object_array_element(argv, i as Jint, arg);
     }
@@ -132,8 +135,8 @@ fn call_main(jni:&JNI, path_to_jar:&str, main_class_name:&str, args:&Vec<String>
     // call main()
 
     match (main_class, main_method) {
-        (JNI_NULL, JNI_NULL) => println!("Could not find {} in {}", main_method, main_class),
-        (_, _) => jni.call_static_void_method_a(main_class, main_method, [argv])
+        (JNI_NULL, JNI_NULL) => println!("Could not find {}.main()", main_class_name),
+        (_, _) => jni.call_static_void_method_a(main_class, main_method, &[argv])
     };
 
     println!("Quit from JVM ...");
@@ -153,7 +156,7 @@ fn spawn_vm() {
         optflag("h", "help", "print this help menu")
     ];
 
-    let matches = match getopts(args.tail(), opts) {
+    let matches = match getopts(args.tail(), &opts) {
         Err(f) => {
             println!("{} Run {} --help to show options.", f.to_string(), program);
             return;
@@ -162,28 +165,28 @@ fn spawn_vm() {
     };
 
     if matches.opt_present("h") {
-        print_usage(program.as_slice(), opts);
+        print_usage(program.as_slice(), &opts);
         return;
     }
 
-    let config_path = os::make_absolute(&Path::new("config.json"));
+    let config_path = os::make_absolute(&Path::new("config.json")).unwrap();
     println!("config path: {}", config_path.display());
 
     let root_path = config_path.dir_path();
     println!("pwd: {}", root_path.display());
 
     // change working dir (MacOS: starts at parent folder of .app)
-    if !os::change_dir(&root_path) {
+    if os::change_dir(&root_path).is_err() {
         panic!("Could not change working directory");
     }
 
-    let libjvmpath = get_libjvm_path(os::make_absolute(&Path::new("jre")));
+    let libjvmpath = get_libjvm_path(os::make_absolute(&Path::new("jre")).unwrap());
     println!("JRE path: {}", libjvmpath.display());
 
     // read config JSON
     let config = read_config(&config_path);
 
-    let cp_path = os::make_absolute(&Path::new(config.jar.as_slice()));
+    let cp_path = os::make_absolute(&Path::new(config.jar.as_slice())).unwrap();
     let class_path = format!("file://{}", cp_path.display());
 
     println!("Loading JVM library ...");
@@ -195,7 +198,7 @@ fn spawn_vm() {
     println!("Creating JVM instance ...");
     load_jvm(&mut jni, &config);
 
-    println!("Invoking {:s}.main()", config.mainClass);
+    println!("Invoking {}.main()", config.mainClass);
     call_main(&jni, class_path.as_slice(), config.mainClass.as_slice(), &matches.free);
 
     destroy_vm(&jni);
@@ -214,13 +217,13 @@ extern fn run_loop_callback(signal:&Receiver<c_int>) {
 #[cfg(target_os = "macos")]
 fn main() {
 
-    let (tx, rx): (Sender<c_int>, Receiver<c_int>) = std::comm::channel();
+    let (tx, rx): (Sender<c_int>, Receiver<c_int>) = channel();
     let proc_tx = tx.clone();
 
-    spawn(proc() {
+    Thread::spawn(move|| {
         spawn_vm();
-        proc_tx.send(0);
-    });
+        proc_tx.send(0).unwrap();
+    }).detach();
 
     unsafe {
         cfRunLoopRun(run_loop_callback, &rx);
