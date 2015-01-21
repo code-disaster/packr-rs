@@ -59,10 +59,10 @@ fn init_jvm_arguments(jni:&mut JNI, config: &Config) {
 
     println!("class path: {}", class_path);
 
-    jni.init_vm_args(num_args + 1u);
-    jni.push_vm_arg(0u, class_path.as_slice());
+    jni.init_vm_args(num_args + 1);
+    jni.push_vm_arg(0, class_path.as_slice());
 
-    for i in range(0u, num_args) {
+    for i in range(0, num_args) {
         let ref vm_arg = config.vmArgs[i];
         jni.push_vm_arg(i + 1, vm_arg.as_slice());
     }
@@ -126,7 +126,7 @@ fn call_main(jni:&JNI, path_to_jar:&str, main_class_name:&str, args:&Vec<String>
     check_for_exceptions(jni);
     assert!(!JNI::is_null(argv));
 
-    for i in range(0u, argc) {
+    for i in range(0, argc) {
         println!("Application argument: {}", args[i].as_slice());
         let arg = jni.new_string_utf(args[i].as_slice());
         jni.set_object_array_element(argv, i as Jint, arg);
@@ -199,7 +199,7 @@ fn spawn_vm() {
     load_jvm(&mut jni, &config);
 
     println!("Invoking {}.main()", config.mainClass);
-    call_main(&jni, class_path.as_slice(), config.mainClass.as_slice(), &matches.free);
+    call_main(&jni, &class_path[], &config.mainClass[], &matches.free);
 
     destroy_vm(&jni);
 }
@@ -223,7 +223,7 @@ fn main() {
     Thread::spawn(move|| {
         spawn_vm();
         proc_tx.send(0).unwrap();
-    }).detach();
+    });
 
     unsafe {
         cfRunLoopRun(run_loop_callback, &rx);
