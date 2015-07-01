@@ -4,6 +4,9 @@ extern crate getopts;
 extern crate jni;
 extern crate rustc_serialize;
 
+#[cfg(target_os = "macos")]
+extern crate libc;
+
 use getopts::Options;
 use jni::JNI;
 use jni::classpath::load_static_method;
@@ -18,11 +21,12 @@ use std::io::prelude::*;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
-/*
-use std::os;
+#[cfg(target_os = "macos")]
+use libc::{c_int};
+#[cfg(target_os = "macos")]
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::thread::Thread;
-*/
+#[cfg(target_os = "macos")]
+use std::thread;
 
 #[derive(RustcDecodable)]
 struct Config {
@@ -32,7 +36,7 @@ struct Config {
 }
 
 #[cfg(target_os = "macos")]
-fn get_libjvm_path_os(path: &PathBuf) {
+fn get_libjvm_path_os(path: &mut PathBuf) {
     path.push("lib");
     path.push("jli");
     path.push("libjli");
@@ -40,7 +44,7 @@ fn get_libjvm_path_os(path: &PathBuf) {
 }
 
 #[cfg(target_os = "linux")]
-fn get_libjvm_path_os(path: &PathBuf) {
+fn get_libjvm_path_os(path: &mut PathBuf) {
     path.push("lib");
     path.push("amd64");
     path.push("server");
@@ -251,7 +255,7 @@ fn main() {
     let (tx, rx): (Sender<c_int>, Receiver<c_int>) = channel();
     let proc_tx = tx.clone();
 
-    Thread::spawn(move|| {
+    thread::spawn(move|| {
         spawn_vm();
         proc_tx.send(0).unwrap();
     });
