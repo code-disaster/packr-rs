@@ -1,13 +1,14 @@
 [package]
 
 name = "packr-rs"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["Daniel Ludwig <codi@code-disaster.com>"]
 
 build = "build.rs"
 
 [dependencies]
-rustc-serialize = "0.2.7"
+getopts = "0.2.11"
+rustc-serialize = "0.3.15"
 
 [dependencies.jni]
 git = "http://github.com/code-disaster/jni-rs"

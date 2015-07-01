@@ -1,6 +1,4 @@
-use std::io::Command;
-use std::os;
-
+#[cfg(target_os = "macos")]
 fn main() {
 
     let out_dir = os::getenv("OUT_DIR").unwrap();
@@ -9,4 +7,8 @@ fn main() {
 
     println!("cargo:rustc-flags=-L {}", out_dir);
 
+}
+
+#[cfg(not(target_os = "macos"))]
+fn main() {
 }
