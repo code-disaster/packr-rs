@@ -36,13 +36,18 @@ struct Config {
 }
 
 #[cfg(target_os = "macos")]
-fn get_root_path(program:&str) -> &Path {
-    Path::new(program).parent().unwrap()
+fn select_root_path(program: &str) {
+    let program_path = Path::new(&program).parent().unwrap();
+    println!("executable: {}", program_path.display());
+
+    if env::set_current_dir(&program_path).is_err() {
+        panic!("Could not change working directory");
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
-fn get_root_path(program:&str) -> &Path {
-    env::current_dir().unwrap()
+#[allow(unused_variables)]
+fn select_root_path(program: &str) {
 }
 
 #[cfg(target_os = "macos")]
@@ -187,9 +192,7 @@ fn print_usage(program: &str, opts: Options) {
 
 fn spawn_vm() {
     let args: Vec<String> = env::args().collect();
-
     let program = args[0].clone();
-    println!("application: {}", program);
 
     let mut opts = Options::new();
     opts.optflag("h", "help", "print this help menu");
@@ -207,13 +210,10 @@ fn spawn_vm() {
         return;
     }
 
-    let root_path = get_root_path(&program);
-    println!("current directory: {}", root_path.display());
+    select_root_path(&program);
 
-    // change working dir (MacOS: starts at parent folder of .app)
-    if env::set_current_dir(&root_path).is_err() {
-        panic!("Could not change working directory");
-    }
+    let root_path = env::current_dir().unwrap();
+    println!("working directory: {}", root_path.display());
 
     let libjvmpath = get_libjvm_path(root_path.join("jre").as_path());
     println!("JRE path: {}", libjvmpath.display());
