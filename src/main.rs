@@ -70,17 +70,11 @@ fn get_libjvm_path(jre: &Path) -> PathBuf {
 fn init_jvm_arguments(jni: &mut JNI, config: &Config) {
     let num_args = config.vmArgs.len();
     
-    let cp_path = Path::new(&config.jar);
-    let class_path = format!("-Djava.class.path={}", cp_path.display());
-
-    println!("class path: {}", class_path);
-
-    jni.init_vm_args(num_args + 1);
-    jni.push_vm_arg(0, &class_path);
+    jni.init_vm_args(num_args);
 
     for i in 0..num_args {
         let ref vm_arg = config.vmArgs[i];
-        jni.push_vm_arg(i + 1, &vm_arg);
+        jni.push_vm_arg(i, &vm_arg);
     }
 }
 
@@ -95,10 +89,11 @@ fn load_jvm(jni: &mut JNI, config: &Config) {
     };
 
     // attach to current thread
-    /*if jni.attach_current_thread() != JNI_OK {
-        panic!("Could not attach JVM to thread");
+    match ffi::attach_current_thread(jni.get_jvm()) {
+        (JNI_OK, _) => {},
+        (_, _) => panic!("Could not attach JVM to thread")
     }
-    println!("JVM attached to thread ...");*/
+    println!("JVM attached to thread ...");
 }
 
 fn check_for_exceptions(env: &mut JNIEnv) {
@@ -115,6 +110,14 @@ fn call_main(env: &mut JNIEnv, path_to_jar: &str, main_class_name: &str, args: &
     // do class-loader voodoo
 
     let (main_class, main_method) = load_static_method(env, path_to_jar, main_class_name);
+
+    match (main_class, main_method) {
+        (JNI_NULL, JNI_NULL) => {
+            println!("Could not find {}.main()", main_class_name);
+            return;
+        },
+        (_, _) => {}
+    };
 
     // pass program arguments
 
@@ -135,11 +138,7 @@ fn call_main(env: &mut JNIEnv, path_to_jar: &str, main_class_name: &str, args: &
     }
 
     // call main()
-
-    match (main_class, main_method) {
-        (JNI_NULL, JNI_NULL) => println!("Could not find {}.main()", main_class_name),
-        (_, _) => ffi::call_static_void_method_a(env, main_class, main_method, &[argv])
-    };
+    ffi::call_static_void_method_a(env, main_class, main_method, &[argv]);
 
     println!("Quit from JVM ...");
 }
@@ -212,7 +211,8 @@ fn spawn_vm() {
     let config = read_config(root_path.join("config.json").as_path());
 
     let cp_path = Path::new(&config.jar);
-    let class_path = format!("file://{}", cp_path.display());
+    let class_path = format!("{}", cp_path.display());
+    println!("class path: {}", class_path);
 
     println!("Loading JVM library ...");
     let mut jni:JNI = match JNI::new(&libjvmpath) {
