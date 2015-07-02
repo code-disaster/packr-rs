@@ -185,9 +185,9 @@ fn read_config(path: &Path) -> Config {
 }
 
 fn print_usage(program: &str, opts: Options) {
-    let brief = format!("Usage: {} [options]", program);
+    let brief = format!("Usage:\n    {} [options] [--] [<args>...]", program);
     print!("{}", opts.usage(&brief));
-    //println!("-- {{args}}\tUnparsed arguments passed through to Java main() method.");
+    println!("\n    Trailing arguments are passed to Java main() method.");
 }
 
 fn spawn_vm() {
