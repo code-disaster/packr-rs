@@ -36,6 +36,16 @@ struct Config {
 }
 
 #[cfg(target_os = "macos")]
+fn get_root_path(program:&str) -> &Path {
+    Path::new(program).parent().unwrap()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn get_root_path(program:&str) -> &Path {
+    env::current_dir().unwrap()
+}
+
+#[cfg(target_os = "macos")]
 fn get_libjvm_path_os(path: &mut PathBuf) {
     path.push("lib");
     path.push("jli");
@@ -140,6 +150,8 @@ fn call_main(env: &mut JNIEnv, path_to_jar: &str, main_class_name: &str, args: &
     // call main()
     ffi::call_static_void_method_a(env, main_class, main_method, &[argv]);
 
+    check_for_exceptions(env);
+
     println!("Quit from JVM ...");
 }
 
@@ -177,7 +189,7 @@ fn spawn_vm() {
     let args: Vec<String> = env::args().collect();
 
     let program = args[0].clone();
-    //println!("application: {}", program);
+    println!("application: {}", program);
 
     let mut opts = Options::new();
     opts.optflag("h", "help", "print this help menu");
@@ -195,8 +207,7 @@ fn spawn_vm() {
         return;
     }
 
-    //let root_path = Path::new(&program).parent().unwrap();
-    let root_path = env::current_dir().unwrap();
+    let root_path = get_root_path(&program);
     println!("current directory: {}", root_path.display());
 
     // change working dir (MacOS: starts at parent folder of .app)
