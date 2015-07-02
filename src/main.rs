@@ -58,10 +58,19 @@ fn get_libjvm_path_os(path: &mut PathBuf) {
     path.set_extension("dylib");
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", arch = "x86_64"))]
 fn get_libjvm_path_os(path: &mut PathBuf) {
     path.push("lib");
     path.push("amd64");
+    path.push("server");
+    path.push("libjvm");
+    path.set_extension("so");
+}
+
+#[cfg(all(target_os = "linux", arch = "x86"))]
+fn get_libjvm_path_os(path: &mut PathBuf) {
+    path.push("lib");
+    path.push("i386");
     path.push("server");
     path.push("libjvm");
     path.set_extension("so");
